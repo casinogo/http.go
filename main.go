@@ -1,75 +1,45 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"net"
 	"os"
-	"strings"
 )
 
+/*
+
+program should start by using net.ResolveUDPAddr to resolve the address localhost:42069
+Use net.DialUDP to prepare a UDP connection, and defer the closing of the connection.
+Create a new bufio.Reader that reads from os.Stdin
+Start an infinite loop that:
+Prints a > character to the console (to indicate that the program is ready for user input)
+Reads a line from the bufio.Reader using reader.ReadString, and log any errors
+Writes the line to the UDP connection using conn.Write, and log any errors
+*/
+
 func main() {
-	f, err := os.Open("messages.txt")
+	addr, err := net.ResolveUDPAddr("udp", "localhost:42069")
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
 
-	listenr, err := net.Listen("tcp", ":42069")
+	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
 		panic(err)
 	}
-	defer listenr.Close()
 
-	conn, err := listenr.Accept()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Connection established from", conn.RemoteAddr())
-
-	ch := getLinesChannel(conn)
-
-	for line := range ch {
-		fmt.Println(line)
-	}
-
-	fmt.Println("Connection closed from", conn.RemoteAddr())
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		defer f.Close()
-
-		var curLine string
-		buf := make([]byte, 8)
-		for {
-			n, err := f.Read(buf)
-			if err != nil {
-				if err.Error() == "EOF" {
-					break
-				}
-				panic(err)
-			}
-			if n == 0 {
-				break
-			}
-			line := string(buf[0:n])
-			curLine += line
-
-			result := strings.Split(curLine, "\n")
-
-			if len(result) > 1 {
-				for i := 0; i < len(result)-1; i++ {
-					ch <- result[i]
-				}
-				curLine = result[len(result)-1]
-			}
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print(">")
+		line, _, err := reader.ReadLine()
+		if err != nil {
+			panic(err)
 		}
-		if len(curLine) > 0 {
-			ch <- curLine
+		_, err = conn.Write([]byte(line))
+		if err != nil {
+			fmt.Println(err)
+			continue
 		}
-	}()
-	return ch
+	}
 }
